@@ -1,0 +1,98 @@
+Model the following Doctor’s information system as a graph model, and
+answer the following queries using Cypher.
+Consider the doctors in and around Pune. Each Doctor is specialized in
+some stream like Pediatric, Gynaec, Heart Specialist, Cancer Specialist,
+ENT, etc. A doctor may be a visiting doctor across many hospitals or he
+may own a clinic. A person can provide a review/can recommend a
+doctor.
+1. Identify the labels and relationships, along with their properties, and
+draw a high-level Graph model. [3]
+2. Create nodes and relationships, along with their properties, and
+visualize your actual Graph model. [3]
+3. Answer the Queries
+a. List the Orthopedic doctors in ……. Area. [3]
+b. List the doctors who has specialization in ____ [3]
+c. List the most recommended Pediatrics in Seren Medows. [4]
+d. List all the who visits more than 2 hospitals [4]
+
+
+
+# Step 1: Open MongoDB    using mongosh
+mongosh
+
+# Step 2: Create a database for the Doctor's information system graph model
+use doctor_system_db
+
+# Step 3: Create collections and insert data for doctors, hospitals, clinics, and reviews
+db.doctors.insertMany([
+  { _id: 1, name: "Dr. John Doe", specialization: "Orthopedic", clinic: "Ortho Clinic", hospital: ["MedCity", "Healing Touch"] },
+  { _id: 2, name: "Dr. Jane Smith", specialization: "Pediatrics", clinic: "Pediacare", hospital: ["Happy Health", "Sunshine Clinic"] },
+  { _id: 3, name: "Dr. Alice Brown", specialization: "Gynaec", clinic: "Women’s Care", hospital: ["MedCity"] },
+  { _id: 4, name: "Dr. Mark Lee", specialization: "Cardiology", clinic: "Heartbeat", hospital: ["Heart Center", "Healing Touch"] },
+  { _id: 5, name: "Dr. Eva Davis", specialization: "Pediatrics", clinic: "Pediacare", hospital: ["Happy Health", "Seren Medows"] }
+])
+
+db.hospitals.insertMany([
+  { _id: 1, name: "MedCity", location: "Pune" },
+  { _id: 2, name: "Happy Health", location: "Pune" },
+  { _id: 3, name: "Healing Touch", location: "Pune" },
+  { _id: 4, name: "Heart Center", location: "Pune" },
+  { _id: 5, name: "Sunshine Clinic", location: "Pune" },
+  { _id: 6, name: "Seren Medows", location: "Pune" }
+])
+
+db.reviews.insertMany([
+  { _id: 1, doctorId: 1, review: "Great orthopedic surgeon!", rating: 5, recommender: "Mike Lee" },
+  { _id: 2, doctorId: 2, review: "Very caring pediatrician!", rating: 5, recommender: "Emma White" },
+  { _id: 3, doctorId: 2, review: "Excellent care for children.", rating: 4, recommender: "Liam Brown" },
+  { _id: 4, doctorId: 3, review: "Highly professional Gynaec!", rating: 4, recommender: "Olivia Green" },
+  { _id: 5, doctorId: 5, review: "Best pediatrician in the area.", rating: 5, recommender: "Sophia Harris" }
+])
+
+# Step 4: Write the queries to fetch the required results
+
+# a. List the Orthopedic doctors in the given area (example: Pune)
+db.doctors.aggregate([
+  { $match: { specialization: "Orthopedic" } },
+  { $lookup: {
+    from: "hospitals",
+    localField: "hospital",
+    foreignField: "_id",
+    as: "hospital_info"
+  }},
+  { $unwind: "$hospital_info" },
+  { $match: { "hospital_info.location": "Pune" } },
+  { $project: { name: 1, specialization: 1 } }
+])
+
+# b. List the doctors who specialize in a given stream, for example, Pediatrics
+db.doctors.aggregate([
+  { $match: { specialization: "Pediatrics" } },
+  { $project: { name: 1, specialization: 1 } }
+])
+
+# c. List the most recommended Pediatrics in Seren Medows
+db.doctors.aggregate([
+  { $match: { specialization: "Pediatrics" } },
+  { $lookup: {
+    from: "reviews",
+    localField: "_id",
+    foreignField: "doctorId",
+    as: "review_info"
+  }},
+  { $unwind: "$review_info" },
+  { $match: { "review_info.recommender": "Seren Medows" } },
+  { $sort: { "review_info.rating": -1 } },
+  { $limit: 1 },
+  { $project: { name: 1, review_info: 1 } }
+])
+
+# d. List all doctors who visit more than 2 hospitals
+db.doctors.aggregate([
+  { $match: { $expr: { $gt: [{ $size: "$hospital" }, 2] } } },
+  { $project: { name: 1, hospital: 1 } }
+])
+
+# Step 5: Exit MongoDB   
+exit
+
